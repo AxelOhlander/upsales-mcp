@@ -6,4 +6,3 @@ dist/
 .env
 .claude/
 ai_temp_scripts/
-uv.lock
