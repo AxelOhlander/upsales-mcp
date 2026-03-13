@@ -11,7 +11,7 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
       git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \
     fi
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
 
 RUN uv sync --frozen --no-dev
