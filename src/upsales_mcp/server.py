@@ -13,7 +13,9 @@ import os
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from pydantic import AnyHttpUrl
 
 from upsales import Upsales
 
@@ -40,6 +42,21 @@ def _create_server() -> FastMCP:
                 "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
             ),
             token_verifier=UpsalesTokenVerifier(),
+            auth=AuthSettings(
+                issuer_url=AnyHttpUrl(
+                    os.environ.get(
+                        "AUTH_ISSUER_URL",
+                        "https://upsales-mcp-production.up.railway.app",
+                    )
+                ),
+                resource_server_url=AnyHttpUrl(
+                    os.environ.get(
+                        "AUTH_RESOURCE_URL",
+                        "https://upsales-mcp-production.up.railway.app",
+                    )
+                ),
+                required_scopes=[],
+            ),
         )
     return FastMCP(
         "Upsales CRM",
