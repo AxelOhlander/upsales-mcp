@@ -8,16 +8,18 @@ Supports two modes:
 - Hosted (streamable-http): Each client sends their API key as Bearer token
 """
 
+import contextvars
 import json
 import os
 
-from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.server.auth.provider import AccessToken, TokenVerifier
-from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
-from pydantic import AnyHttpUrl
 
 from upsales import Upsales
+
+# Store the Bearer token per-request via contextvar
+_current_api_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_api_key", default=None
+)
 
 
 def _is_hosted() -> bool:
@@ -25,77 +27,28 @@ def _is_hosted() -> bool:
     return os.environ.get("MCP_TRANSPORT", "stdio") == "streamable-http"
 
 
-def _create_server() -> FastMCP:
-    """Create the FastMCP server with appropriate auth config."""
-    if _is_hosted():
-        port = int(os.environ.get("PORT", 8000))
-        return FastMCP(
-            "Upsales CRM",
-            host="0.0.0.0",
-            port=port,
-            stateless_http=True,
-            json_response=True,
-            instructions=(
-                "Upsales CRM server providing read access to contacts, companies, "
-                "appointments (meetings), phone calls, and orders. "
-                "Use search tools with filter operators like >=, <=, !=, *value for contains. "
-                "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
-            ),
-            token_verifier=UpsalesTokenVerifier(),
-            auth=AuthSettings(
-                issuer_url=AnyHttpUrl(
-                    os.environ.get(
-                        "AUTH_ISSUER_URL",
-                        "https://upsales-mcp-production.up.railway.app",
-                    )
-                ),
-                resource_server_url=AnyHttpUrl(
-                    os.environ.get(
-                        "AUTH_RESOURCE_URL",
-                        "https://upsales-mcp-production.up.railway.app",
-                    )
-                ),
-                required_scopes=[],
-            ),
-        )
-    return FastMCP(
-        "Upsales CRM",
-        instructions=(
-            "Upsales CRM server providing read access to contacts, companies, "
-            "appointments (meetings), phone calls, and orders. "
-            "Use search tools with filter operators like >=, <=, !=, *value for contains. "
-            "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
-        ),
-    )
-
-
-class UpsalesTokenVerifier(TokenVerifier):
-    """Verify Bearer tokens by treating them as Upsales API keys.
-
-    Any non-empty token is accepted. The Upsales API itself will reject
-    invalid tokens with a 401, so we don't need to pre-validate.
-    """
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        if not token or not token.strip():
-            return None
-        return AccessToken(
-            token=token,
-            client_id="upsales-user",
-            scopes=[],
-        )
-
-
-mcp = _create_server()
+mcp = FastMCP(
+    "Upsales CRM",
+    stateless_http=True if _is_hosted() else False,
+    json_response=True if _is_hosted() else False,
+    host="0.0.0.0" if _is_hosted() else "127.0.0.1",
+    port=int(os.environ.get("PORT", 8000)),
+    instructions=(
+        "Upsales CRM server providing read access to contacts, companies, "
+        "appointments (meetings), phone calls, and orders. "
+        "Use search tools with filter operators like >=, <=, !=, *value for contains. "
+        "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
+    ),
+)
 
 
 def _get_api_key() -> str:
     """Get the Upsales API key from Bearer token (hosted) or env var (local)."""
     if _is_hosted():
-        access_token = get_access_token()
-        if access_token:
-            return access_token.token
-        msg = "No Bearer token provided. Send your Upsales API key as: Authorization: Bearer <key>"
+        token = _current_api_key.get()
+        if token:
+            return token
+        msg = "No Bearer token provided"
         raise ValueError(msg)
 
     token = os.environ.get("UPSALES_API_KEY") or os.environ.get("UPSALES_TOKEN")
@@ -436,10 +389,45 @@ async def search_orders(
     return _serialize(result[:limit])
 
 
+def _build_app():
+    """Build ASGI app with auth middleware for hosted mode."""
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    class BearerAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:].strip()
+                if token:
+                    _current_api_key.set(token)
+                    return await call_next(request)
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing Authorization header"},
+            )
+
+    asgi_app = mcp.streamable_http_app()
+    asgi_app.add_middleware(BearerAuthMiddleware)
+    return asgi_app
+
+
 def main():
     """Run the MCP server in the appropriate transport mode."""
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    mcp.run(transport=transport)
+    if transport == "streamable-http":
+        import uvicorn
+
+        app = _build_app()
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", 8000)),
+        )
+    else:
+        mcp.run()
 
 
 if __name__ == "__main__":
