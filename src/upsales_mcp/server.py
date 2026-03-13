@@ -65,17 +65,17 @@ def _get_client() -> Upsales:
 
 def _serialize(obj: object) -> str:
     """Serialize a model or list of models to JSON string."""
-    if isinstance(obj, list):
-        return json.dumps(
-            [item.model_dump(mode="json", by_alias=True) for item in obj],
-            indent=2,
-            default=str,
+
+    def _dump(item: object) -> dict:
+        return item.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude={"custom_fields"},
         )
-    return json.dumps(
-        obj.model_dump(mode="json", by_alias=True),
-        indent=2,
-        default=str,
-    )
+
+    if isinstance(obj, list):
+        return json.dumps([_dump(item) for item in obj], indent=2, default=str)
+    return json.dumps(_dump(obj), indent=2, default=str)
 
 
 # ---------------------------------------------------------------------------
