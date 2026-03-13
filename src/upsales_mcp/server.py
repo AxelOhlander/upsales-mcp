@@ -37,7 +37,9 @@ mcp = FastMCP(
         "Upsales CRM server providing read access to contacts, companies, "
         "appointments (meetings), phone calls, and orders. "
         "Use search tools with filter operators like >=, <=, !=, *value for contains. "
-        "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
+        "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
+        "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
+        "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']."
     ),
 )
 
@@ -100,6 +102,7 @@ async def list_companies(
     limit: int = 50,
     offset: int = 0,
     sort: str | None = None,
+    fields: list[str] | None = None,
 ) -> str:
     """List companies with pagination.
 
@@ -107,9 +110,15 @@ async def list_companies(
         limit: Max results to return (default 50, max 1000).
         offset: Pagination offset.
         sort: Sort field. Prefix with '-' for descending (e.g. '-regDate').
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'phone', 'webpage', 'addresses']
+            Common fields: id, name, phone, webpage, orgNo, active, addresses,
+            users, regDate, modDate, journeyStep, turnover, noEmployees
     """
     async with _get_client() as client:
-        result = await client.companies.list(limit=limit, offset=offset, sort=sort)
+        result = await client.companies.list(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
     return _serialize(result)
 
 
@@ -118,6 +127,7 @@ async def search_companies(
     filters: dict[str, str | int],
     sort: str | None = None,
     limit: int = 100,
+    fields: list[str] | None = None,
 ) -> str:
     """Search companies using filters with comparison operators.
 
@@ -136,13 +146,15 @@ async def search_companies(
         filters: Dict of field-value pairs with optional operators.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'phone']
 
     Example filters:
         {"name": "*Acme", "active": 1} - Active companies containing "Acme"
         {"regDate": ">=2024-01-01"} - Companies created since 2024
     """
     async with _get_client() as client:
-        result = await client.companies.search(sort=sort, **filters)
+        result = await client.companies.search(sort=sort, fields=fields, **filters)
     return _serialize(result[:limit])
 
 
@@ -168,6 +180,7 @@ async def list_contacts(
     limit: int = 50,
     offset: int = 0,
     sort: str | None = None,
+    fields: list[str] | None = None,
 ) -> str:
     """List contacts with pagination.
 
@@ -175,9 +188,15 @@ async def list_contacts(
         limit: Max results to return (default 50, max 1000).
         offset: Pagination offset.
         sort: Sort field. Prefix with '-' for descending.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'email', 'phone', 'title']
+            Common fields: id, name, email, phone, cellPhone, title, client,
+            regDate, modDate, active, journeyStep
     """
     async with _get_client() as client:
-        result = await client.contacts.list(limit=limit, offset=offset, sort=sort)
+        result = await client.contacts.list(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
     return _serialize(result)
 
 
@@ -186,6 +205,7 @@ async def search_contacts(
     filters: dict[str, str | int],
     sort: str | None = None,
     limit: int = 100,
+    fields: list[str] | None = None,
 ) -> str:
     """Search contacts using filters with comparison operators.
 
@@ -196,6 +216,8 @@ async def search_contacts(
         filters: Dict of field-value pairs with optional operators.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'email', 'phone']
 
     Example filters:
         {"name": "*John", "active": 1} - Active contacts named John
@@ -203,7 +225,7 @@ async def search_contacts(
         {"email": "*@acme.com"} - Contacts with acme.com email
     """
     async with _get_client() as client:
-        result = await client.contacts.search(sort=sort, **filters)
+        result = await client.contacts.search(sort=sort, fields=fields, **filters)
     return _serialize(result[:limit])
 
 
@@ -229,6 +251,7 @@ async def list_appointments(
     limit: int = 50,
     offset: int = 0,
     sort: str | None = None,
+    fields: list[str] | None = None,
 ) -> str:
     """List appointments/meetings with pagination.
 
@@ -236,9 +259,15 @@ async def list_appointments(
         limit: Max results to return (default 50, max 1000).
         offset: Pagination offset.
         sort: Sort field. Prefix with '-' for descending (e.g. '-date').
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'date', 'endDate', 'outcome']
+            Common fields: id, description, date, endDate, outcome, location,
+            client, contact, users, activityType, regDate
     """
     async with _get_client() as client:
-        result = await client.appointments.list(limit=limit, offset=offset, sort=sort)
+        result = await client.appointments.list(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
     return _serialize(result)
 
 
@@ -247,6 +276,7 @@ async def search_appointments(
     filters: dict[str, str | int],
     sort: str | None = None,
     limit: int = 100,
+    fields: list[str] | None = None,
 ) -> str:
     """Search appointments/meetings using filters with comparison operators.
 
@@ -257,6 +287,8 @@ async def search_appointments(
         filters: Dict of field-value pairs with optional operators.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'date', 'outcome']
 
     Example filters:
         {"date": ">=2024-03-01", "date": "<=2024-03-31"} - Appointments in March
@@ -264,7 +296,7 @@ async def search_appointments(
         {"client.id": 123} - Meetings for a specific company
     """
     async with _get_client() as client:
-        result = await client.appointments.search(sort=sort, **filters)
+        result = await client.appointments.search(sort=sort, fields=fields, **filters)
     return _serialize(result[:limit])
 
 
@@ -290,6 +322,7 @@ async def list_phone_calls(
     limit: int = 50,
     offset: int = 0,
     sort: str | None = None,
+    fields: list[str] | None = None,
 ) -> str:
     """List phone calls with pagination.
 
@@ -297,9 +330,15 @@ async def list_phone_calls(
         limit: Max results to return (default 50, max 1000).
         offset: Pagination offset.
         sort: Sort field. Prefix with '-' for descending.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'date', 'duration', 'client', 'contact']
+            Common fields: id, date, duration, client, contact, user,
+            type, regDate
     """
     async with _get_client() as client:
-        result = await client.phone_calls.list(limit=limit, offset=offset, sort=sort)
+        result = await client.phone_calls.list(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
     return _serialize(result)
 
 
@@ -308,6 +347,7 @@ async def search_phone_calls(
     filters: dict[str, str | int],
     sort: str | None = None,
     limit: int = 100,
+    fields: list[str] | None = None,
 ) -> str:
     """Search phone calls using filters with comparison operators.
 
@@ -318,13 +358,15 @@ async def search_phone_calls(
         filters: Dict of field-value pairs with optional operators.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'date', 'duration', 'client']
 
     Example filters:
         {"user.id": 5} - Calls by a specific user
         {"client.id": 123} - Calls for a specific company
     """
     async with _get_client() as client:
-        result = await client.phone_calls.search(sort=sort, **filters)
+        result = await client.phone_calls.search(sort=sort, fields=fields, **filters)
     return _serialize(result[:limit])
 
 
@@ -350,6 +392,7 @@ async def list_orders(
     limit: int = 50,
     offset: int = 0,
     sort: str | None = None,
+    fields: list[str] | None = None,
 ) -> str:
     """List orders with pagination.
 
@@ -357,9 +400,15 @@ async def list_orders(
         limit: Max results to return (default 50, max 1000).
         offset: Pagination offset.
         sort: Sort field. Prefix with '-' for descending (e.g. '-date').
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'date', 'value', 'probability']
+            Common fields: id, description, date, value, probability, currency,
+            client, contact, user, stage, orderRow, regDate, modDate
     """
     async with _get_client() as client:
-        result = await client.orders.list(limit=limit, offset=offset, sort=sort)
+        result = await client.orders.list(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
     return _serialize(result)
 
 
@@ -368,6 +417,7 @@ async def search_orders(
     filters: dict[str, str | int],
     sort: str | None = None,
     limit: int = 100,
+    fields: list[str] | None = None,
 ) -> str:
     """Search orders using filters with comparison operators.
 
@@ -378,6 +428,8 @@ async def search_orders(
         filters: Dict of field-value pairs with optional operators.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'date', 'value']
 
     Example filters:
         {"stage.id": 5} - Orders at a specific stage
@@ -385,7 +437,7 @@ async def search_orders(
         {"client.id": 123, "probability": ">=50"} - Likely orders for a company
     """
     async with _get_client() as client:
-        result = await client.orders.search(sort=sort, **filters)
+        result = await client.orders.search(sort=sort, fields=fields, **filters)
     return _serialize(result[:limit])
 
 
