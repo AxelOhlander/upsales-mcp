@@ -29,8 +29,11 @@ def _is_hosted() -> bool:
 def _create_server() -> FastMCP:
     """Create the FastMCP server with appropriate auth config."""
     if _is_hosted():
+        port = int(os.environ.get("PORT", 8000))
         return FastMCP(
             "Upsales CRM",
+            host="0.0.0.0",
+            port=port,
             stateless_http=True,
             json_response=True,
             instructions=(
@@ -431,11 +434,7 @@ async def search_orders(
 def main():
     """Run the MCP server in the appropriate transport mode."""
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    if transport == "streamable-http":
-        port = int(os.environ.get("PORT", 8000))
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
-    else:
-        mcp.run()
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":
