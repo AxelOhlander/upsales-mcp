@@ -45,10 +45,10 @@ def _create_server() -> FastMCP:
             token_verifier=UpsalesTokenVerifier(),
             auth=AuthSettings(
                 issuer_url=AnyHttpUrl(
-                    os.environ.get("AUTH_ISSUER_URL", "https://upsales-mcp.up.railway.app")
+                    os.environ.get("AUTH_ISSUER_URL", "https://upsales-mcp-production.up.railway.app")
                 ),
                 resource_server_url=AnyHttpUrl(
-                    os.environ.get("AUTH_RESOURCE_URL", "https://upsales-mcp.up.railway.app")
+                    os.environ.get("AUTH_RESOURCE_URL", "https://upsales-mcp-production.up.railway.app")
                 ),
                 required_scopes=[],
             ),
