@@ -1,0 +1,28 @@
+[project]
+name = "upsales-mcp"
+version = "0.1.0"
+description = "MCP server for Upsales CRM - exposes contacts, companies, appointments, phone calls, and orders"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "mcp[cli]>=1.12.0",
+    "upsales",
+]
+
+[project.scripts]
+upsales-mcp = "upsales_mcp.server:main"
+
+[tool.uv.sources]
+# For deployment: switch to the git line below
+# upsales = { git = "https://github.com/AxelOhlander/upsales-python-sdk.git", branch = "main" }
+upsales = { path = "../../upsales-python-sdk", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/upsales_mcp"]
+
+[tool.ruff]
+line-length = 100

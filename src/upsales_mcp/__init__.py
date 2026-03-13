@@ -1,0 +1,1 @@
+"""Upsales CRM MCP Server."""
