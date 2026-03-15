@@ -209,7 +209,7 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "optins",
         "socialEvent",
         "connectedClients",
-        # Mail: internal tracking
+        # Mail: internal tracking and large fields
         "groupMailId",
         "jobId",
         "mailBodySnapshotId",
@@ -219,6 +219,7 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "tags",
         "template",
         "thread",
+        "body",  # HTML email body, often 50K+; request explicitly via fields if needed
         # Order: raw custom fields (opaque fieldIds, not useful without metadata)
         "custom",
         # Order: activity counters (rarely useful)
@@ -521,6 +522,8 @@ async def find_phone_calls(
 async def get_mail(mail_id: int) -> str:
     """Get a single email by ID.
 
+    Note: The 'body' field (full HTML) is excluded by default to save context.
+
     Args:
         mail_id: The Upsales mail ID.
     """
@@ -538,6 +541,9 @@ async def find_mail(
     fields: list[str] | None = None,
 ) -> str:
     """Find emails with optional filters and pagination.
+
+    Note: The 'body' field (full HTML) is excluded by default to save context.
+    Request it explicitly via fields=['body'] if needed.
 
     Common filter fields: type (out/in/pro/err), subject, date, client.id (company ID),
     contact.id, user.id, mailThreadId
