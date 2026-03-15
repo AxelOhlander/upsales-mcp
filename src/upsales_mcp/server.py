@@ -1,6 +1,6 @@
 """Upsales CRM MCP Server.
 
-Exposes Upsales CRM objects (contacts, companies, appointments, phone calls, orders)
+Exposes Upsales CRM objects (contacts, companies, appointments, phone calls, orders, mail)
 as MCP tools for get and find operations.
 
 Supports two modes:
@@ -35,7 +35,7 @@ mcp = FastMCP(
     port=int(os.environ.get("PORT", 8000)),
     instructions=(
         "Upsales CRM server providing read access to contacts, companies, "
-        "appointments (meetings), phone calls, and orders. "
+        "appointments (meetings), phone calls, orders, and emails. "
         "Use find tools with filter operators like >=, <=, !=, *value for contains. "
         "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
@@ -149,6 +149,13 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "expected_value",
         "is_recurring",
         "margin_percentage",
+        "is_outgoing",
+        "is_incoming",
+        "has_error",
+        "from_",
+        "is_map_email",
+        "has_attachments",
+        "has_tracking_events",
         # Order: weighted values (= base value * probability/100, always computable)
         "weightedValue",
         "weightedOneOffValue",
@@ -202,6 +209,16 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "optins",
         "socialEvent",
         "connectedClients",
+        # Mail: internal tracking
+        "groupMailId",
+        "jobId",
+        "mailBodySnapshotId",
+        "isMap",
+        "events",
+        "recipients",
+        "tags",
+        "template",
+        "thread",
         # Order: raw custom fields (opaque fieldIds, not useful without metadata)
         "custom",
         # Order: activity counters (rarely useful)
@@ -489,6 +506,60 @@ async def find_phone_calls(
     api_filters = _transform_filters(filters) if filters else {}
     async with _get_client() as client:
         result, meta = await client.phone_calls._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Mail
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_mail(mail_id: int) -> str:
+    """Get a single email by ID.
+
+    Args:
+        mail_id: The Upsales mail ID.
+    """
+    async with _get_client() as client:
+        result = await client.mail.get(mail_id)
+    return _serialize(result)
+
+
+@mcp.tool()
+async def find_mail(
+    filters: dict[str, str | int | list[str]] | None = None,
+    sort: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fields: list[str] | None = None,
+) -> str:
+    """Find emails with optional filters and pagination.
+
+    Common filter fields: type (out/in/pro/err), subject, date, client.id (company ID),
+    contact.id, user.id, mailThreadId
+
+    Args:
+        filters: Optional dict of field-value pairs with operators.
+        sort: Sort field. Prefix with '-' for descending (e.g. '-date').
+        limit: Max results (default 50, max 1000).
+        offset: Pagination offset.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'subject', 'date', 'type', 'to', 'from']
+            Common fields: id, subject, date, type, to, from, fromName,
+            client, contact, users, body
+
+    Example filters:
+        {"type": "out"} - Sent emails only
+        {"client.id": 123} - Emails for a specific company
+        {"date": [">=2025-01-01", "<=2025-01-31"]} - Emails in January 2025
+    """
+    api_filters = _transform_filters(filters) if filters else {}
+    async with _get_client() as client:
+        result, meta = await client.mail._list_with_metadata(
             limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
