@@ -77,17 +77,50 @@ _OPERATOR_MAP = {
 }
 
 
-def _transform_filters(filters: dict[str, str | int]) -> dict[str, str | int]:
-    """Transform MCP filter operators (>=, <=, *, etc.) to Upsales API syntax."""
-    transformed = {}
+def _parse_op(value: str) -> tuple[str, str]:
+    """Parse a filter value into (comparator, raw_value) for the Upsales q[] syntax."""
+    for op, api_op in _OPERATOR_MAP.items():
+        if value.startswith(op):
+            return api_op.rstrip(":"), value[len(op) :]
+    return "eq", value
+
+
+def _transform_filters(
+    filters: dict[str, str | int | list[str]],
+) -> dict[str, str | int]:
+    """Transform MCP filter operators to Upsales API syntax.
+
+    Supports list values for range queries on the same field:
+        {"date": [">=2026-03-16", "<=2026-03-22"]}
+    These are converted to q[] JSON filters.
+    """
+    simple: dict[str, str | int] = {}
+    q_conditions: list[dict] = []
+
     for field, value in filters.items():
-        if isinstance(value, str):
+        if isinstance(value, list):
+            # Multiple conditions on same field → must use q[] syntax
+            for v in value:
+                comp, raw = _parse_op(str(v))
+                q_conditions.append({"a": field, "c": comp, "v": raw})
+        elif isinstance(value, str):
             for op, api_op in _OPERATOR_MAP.items():
                 if value.startswith(op):
                     value = api_op + value[len(op) :]
                     break
-        transformed[field] = value
-    return transformed
+            simple[field] = value
+        else:
+            simple[field] = value
+
+    if q_conditions:
+        # Merge simple filters into q[] as well for a single query mechanism
+        for field, value in simple.items():
+            comp, raw = _parse_op(str(value)) if isinstance(value, str) else ("eq", value)
+            q_conditions.append({"a": field, "c": comp, "v": raw})
+        # API expects repeated q[] params, each a JSON-encoded condition object
+        return {"q[]": [json.dumps(c) for c in q_conditions]}
+
+    return simple
 
 
 def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | None = None) -> str:
@@ -279,7 +312,7 @@ async def list_companies(
 
 @mcp.tool()
 async def search_companies(
-    filters: dict[str, str | int],
+    filters: dict[str, str | int | list[str]],
     sort: str | None = None,
     limit: int = 100,
     fields: list[str] | None = None,
@@ -295,10 +328,14 @@ async def search_companies(
         field: "!=value"     - Not equals
         field: "*value"      - Contains (substring search)
 
+    For range queries on the same field, use a list of values:
+        field: [">=value1", "<=value2"]
+
     Common filter fields: name, phone, webpage, regDate, modDate, active
 
     Args:
         filters: Dict of field-value pairs with optional operators.
+            Values can be a list for range queries on the same field.
         sort: Sort field. Prefix with '-' for descending.
         limit: Max results (default 100).
         fields: List of field names to return. Reduces response size significantly.
@@ -306,7 +343,7 @@ async def search_companies(
 
     Example filters:
         {"name": "*Acme", "active": 1} - Active companies containing "Acme"
-        {"regDate": ">=2024-01-01"} - Companies created since 2024
+        {"regDate": [">=2024-01-01", "<=2024-12-31"]} - Companies created in 2024
     """
     api_filters = _transform_filters(filters)
     async with _get_client() as client:
@@ -362,7 +399,7 @@ async def list_contacts(
 
 @mcp.tool()
 async def search_contacts(
-    filters: dict[str, str | int],
+    filters: dict[str, str | int | list[str]],
     sort: str | None = None,
     limit: int = 100,
     fields: list[str] | None = None,
@@ -438,7 +475,7 @@ async def list_appointments(
 
 @mcp.tool()
 async def search_appointments(
-    filters: dict[str, str | int],
+    filters: dict[str, str | int | list[str]],
     sort: str | None = None,
     limit: int = 100,
     fields: list[str] | None = None,
@@ -456,7 +493,7 @@ async def search_appointments(
             Example: ['id', 'description', 'date', 'outcome']
 
     Example filters:
-        {"date": ">=2025-03-01"} - Appointments since March 2025
+        {"date": [">=2025-03-16", "<=2025-03-22"]} - Appointments in a specific week
         {"outcome": "planned"} - Only planned meetings
         {"client.id": 123} - Meetings for a specific company
     """
@@ -514,7 +551,7 @@ async def list_phone_calls(
 
 @mcp.tool()
 async def search_phone_calls(
-    filters: dict[str, str | int],
+    filters: dict[str, str | int | list[str]],
     sort: str | None = None,
     limit: int = 100,
     fields: list[str] | None = None,
@@ -606,7 +643,7 @@ async def list_orders(
 
 @mcp.tool()
 async def search_orders(
-    filters: dict[str, str | int],
+    filters: dict[str, str | int | list[str]],
     sort: str | None = None,
     limit: int = 100,
     fields: list[str] | None = None,
