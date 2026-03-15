@@ -493,9 +493,13 @@ async def search_phone_calls(
 # Orders
 # ---------------------------------------------------------------------------
 
-# Upsales API bug: using f[]=value drops the field from the response because the
-# f[] parser resolves 'value' -> 'orderValue' for the ES query, but the response
-# mapper then fails to rename it back. Workaround: send f[]=orderValue instead.
+# WORKAROUND: Upsales API bug (WEB-5366) — f[]=value drops the field from the
+# response. The f[] parser resolves 'value' -> 'orderValue' for the ES _source
+# query, but the response mapper then can't find it to rename back to 'value'.
+# Sending f[]=orderValue bypasses the broken resolution and works correctly.
+# Fix is merged (upsales-crm#23460), expected live 2026-03-17. Remove this
+# workaround once confirmed.
+# https://linear.app/upsales/issue/WEB-5366
 _ORDER_FIELD_MAP = {"value": "orderValue"}
 
 
