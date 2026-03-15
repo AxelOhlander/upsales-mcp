@@ -22,7 +22,7 @@ No test suite exists yet.
 
 Single-file server at `src/upsales_mcp/server.py`. All logic lives here:
 
-- **FastMCP instance** (`mcp`) registered with 12 tools: get/find for each of 6 entities (companies, contacts, appointments, phone calls, orders, mail)
+- **FastMCP instance** (`mcp`) registered with 20 tools: get/find for each of 10 entities (companies, contacts, appointments, phone calls, orders, mail, activities, agreements, products, users)
 - **Auth**: In hosted mode, `BearerAuthMiddleware` extracts the Upsales API key from the Authorization header and stores it in a `contextvars.ContextVar`. In stdio mode, reads `UPSALES_API_KEY` from env.
 - **`_get_client()`** creates a new `Upsales` SDK client per request using the resolved API key
 - **`_serialize()`** converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection and metadata

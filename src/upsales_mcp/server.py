@@ -1,7 +1,7 @@
 """Upsales CRM MCP Server.
 
-Exposes Upsales CRM objects (contacts, companies, appointments, phone calls, orders, mail)
-as MCP tools for get and find operations.
+Exposes Upsales CRM objects (contacts, companies, appointments, phone calls, orders, mail,
+activities, agreements, products, users) as MCP tools for get and find operations.
 
 Supports two modes:
 - Local (stdio): API key from UPSALES_API_KEY env var
@@ -35,7 +35,8 @@ mcp = FastMCP(
     port=int(os.environ.get("PORT", 8000)),
     instructions=(
         "Upsales CRM server providing read access to contacts, companies, "
-        "appointments (meetings), phone calls, orders, and emails. "
+        "appointments (meetings), phone calls, orders, emails, activities (tasks), "
+        "agreements (subscriptions), products, and users. "
         "Use find tools with filter operators like >=, <=, !=, *value for contains. "
         "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
@@ -220,7 +221,19 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "template",
         "thread",
         "body",  # HTML email body, often 50K+; request explicitly via fields if needed
-        # Order: raw custom fields (opaque fieldIds, not useful without metadata)
+        # Agreement: noise fields
+        "orderValue",  # Deprecated, use value
+        "contributionMarginInAgreementCurrency",
+        "valueInMasterCurrency",
+        "yearlyValueInMasterCurrency",
+        "yearlyContributionMargin",
+        "yearlyContributionMarginInAgreementCurrency",
+        "purchaseCost",
+        "isParent",
+        "invoiceRelatedClient",
+        "priceListId",
+        "agreementGroupId",
+        # Order/Agreement: raw custom fields (opaque fieldIds, not useful without metadata)
         "custom",
         # Order: activity counters (rarely useful)
         "noCompletedAppointments",
@@ -507,6 +520,220 @@ async def find_phone_calls(
     api_filters = _transform_filters(filters) if filters else {}
     async with _get_client() as client:
         result, meta = await client.phone_calls._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Activities (Tasks)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_activity(activity_id: int) -> str:
+    """Get a single activity/task by ID.
+
+    Args:
+        activity_id: The Upsales activity ID.
+    """
+    async with _get_client() as client:
+        result = await client.activities.get(activity_id)
+    return _serialize(result)
+
+
+@mcp.tool()
+async def find_activities(
+    filters: dict[str, str | int | list[str]] | None = None,
+    sort: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fields: list[str] | None = None,
+) -> str:
+    """Find activities/tasks with optional filters and pagination.
+
+    Common filter fields: description, date, priority, user.id, client.id (company ID),
+    contact.id, isAppointment (0=task, 1=appointment), regDate, modDate
+
+    Args:
+        filters: Optional dict of field-value pairs with operators.
+        sort: Sort field. Prefix with '-' for descending (e.g. '-date').
+        limit: Max results (default 50, max 1000).
+        offset: Pagination offset.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'date', 'priority', 'users', 'client']
+            Common fields: id, description, date, notes, priority, users,
+            client, contact, regDate, modDate
+
+    Example filters:
+        {"user.id": 5} - Activities for a specific user
+        {"priority": ">=3"} - High priority activities
+        {"date": [">=2025-01-01", "<=2025-01-31"]} - Activities in January
+    """
+    api_filters = _transform_filters(filters) if filters else {}
+    async with _get_client() as client:
+        result, meta = await client.activities._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Agreements (Subscriptions/Contracts)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_agreement(agreement_id: int) -> str:
+    """Get a single agreement/subscription by ID.
+
+    Args:
+        agreement_id: The Upsales agreement ID.
+    """
+    async with _get_client() as client:
+        result = await client.agreements.get(agreement_id)
+    return _serialize(result)
+
+
+@mcp.tool()
+async def find_agreements(
+    filters: dict[str, str | int | list[str]] | None = None,
+    sort: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fields: list[str] | None = None,
+) -> str:
+    """Find agreements/subscriptions with optional filters and pagination.
+
+    Common filter fields: description, client.id (company ID), user.id,
+    stage.id, value, currency, regDate, modDate
+
+    Args:
+        filters: Optional dict of field-value pairs with operators.
+        sort: Sort field. Prefix with '-' for descending.
+        limit: Max results (default 50, max 1000).
+        offset: Pagination offset.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'description', 'value', 'client', 'stage']
+            Common fields: id, description, value, yearlyValue, currency,
+            client, contact, user, stage, metadata, regDate, modDate
+
+    Example filters:
+        {"client.id": 123} - Agreements for a specific company
+        {"value": ">=10000"} - High-value agreements
+    """
+    api_filters = _transform_filters(filters) if filters else {}
+    async with _get_client() as client:
+        result, meta = await client.agreements._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Products
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_product(product_id: int) -> str:
+    """Get a single product by ID.
+
+    Args:
+        product_id: The Upsales product ID.
+    """
+    async with _get_client() as client:
+        result = await client.products.get(product_id)
+    return _serialize(result)
+
+
+@mcp.tool()
+async def find_products(
+    filters: dict[str, str | int | list[str]] | None = None,
+    sort: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fields: list[str] | None = None,
+) -> str:
+    """Find products with optional filters and pagination.
+
+    Common filter fields: name, active, articleNo, listPrice, isRecurring,
+    category.id
+
+    Args:
+        filters: Optional dict of field-value pairs with operators.
+        sort: Sort field. Prefix with '-' for descending.
+        limit: Max results (default 50, max 1000).
+        offset: Pagination offset.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'listPrice', 'active']
+            Common fields: id, name, listPrice, purchaseCost, articleNo,
+            active, isRecurring, category, description
+
+    Example filters:
+        {"active": 1} - Active products only
+        {"name": "*Premium"} - Products containing "Premium"
+        {"isRecurring": 1} - Recurring products only
+    """
+    api_filters = _transform_filters(filters) if filters else {}
+    async with _get_client() as client:
+        result, meta = await client.products._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
+
+
+# ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_user(user_id: int) -> str:
+    """Get a single CRM user by ID.
+
+    Args:
+        user_id: The Upsales user ID.
+    """
+    async with _get_client() as client:
+        result = await client.users.get(user_id)
+    return _serialize(result)
+
+
+@mcp.tool()
+async def find_users(
+    filters: dict[str, str | int | list[str]] | None = None,
+    sort: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    fields: list[str] | None = None,
+) -> str:
+    """Find CRM users with optional filters and pagination.
+
+    Common filter fields: name, email, active, administrator, role.id
+
+    Args:
+        filters: Optional dict of field-value pairs with operators.
+        sort: Sort field. Prefix with '-' for descending.
+        limit: Max results (default 50, max 1000).
+        offset: Pagination offset.
+        fields: List of field names to return. Reduces response size significantly.
+            Example: ['id', 'name', 'email', 'active']
+            Common fields: id, name, email, active, role, administrator,
+            userPhone, userTitle, regDate
+
+    Example filters:
+        {"active": 1} - Active users only
+        {"administrator": 1} - Admin users
+        {"name": "*John"} - Users named John
+    """
+    api_filters = _transform_filters(filters) if filters else {}
+    async with _get_client() as client:
+        result, meta = await client.users._list_with_metadata(
             limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
