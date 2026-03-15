@@ -27,13 +27,9 @@ def _is_hosted() -> bool:
     return os.environ.get("MCP_TRANSPORT", "stdio") == "streamable-http"
 
 
-mcp = FastMCP(
-    "Upsales CRM",
-    stateless_http=True if _is_hosted() else False,
-    json_response=True if _is_hosted() else False,
-    host="0.0.0.0" if _is_hosted() else "127.0.0.1",
-    port=int(os.environ.get("PORT", 8000)),
-    instructions=(
+def _build_instructions() -> str:
+    """Build MCP instructions, optionally including current user context."""
+    base = (
         "Upsales CRM server providing read access to contacts, companies, "
         "appointments (meetings), phone calls, orders, emails, activities (tasks), "
         "agreements (subscriptions), products, and users. "
@@ -41,7 +37,24 @@ mcp = FastMCP(
         "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
         "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']."
-    ),
+    )
+    user_id = os.environ.get("UPSALES_USER_ID")
+    if user_id:
+        base += (
+            f" The current user's Upsales user ID is {user_id}."
+            " When the user says 'my' or 'mine' (e.g. 'my meetings', 'my orders'),"
+            f" always filter by user.id={user_id}."
+        )
+    return base
+
+
+mcp = FastMCP(
+    "Upsales CRM",
+    stateless_http=True if _is_hosted() else False,
+    json_response=True if _is_hosted() else False,
+    host="0.0.0.0" if _is_hosted() else "127.0.0.1",
+    port=int(os.environ.get("PORT", 8000)),
+    instructions=_build_instructions(),
 )
 
 
@@ -221,7 +234,7 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "template",
         "thread",
         "body",  # HTML email body, often 50K+; request explicitly via fields if needed
-        # Agreement: noise fields
+        # Agreement: noise fields (metadata sub-fields stripped via _nested_exclude)
         "orderValue",  # Deprecated, use value
         "contributionMarginInAgreementCurrency",
         "valueInMasterCurrency",
@@ -243,7 +256,7 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "noTimesOrderValueChanged",
     }
 
-    # Keys to strip from nested objects (e.g. orderRow items)
+    # Keys to strip from nested objects (e.g. orderRow items, agreement metadata)
     _nested_exclude = {
         "valueInMasterCurrency",
         "monthlyValueInMasterCurrency",
@@ -258,6 +271,22 @@ def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | No
         "productId",
         "purchaseCost",
         "listPrice",
+        # Agreement metadata internals
+        "agreementInvoiceStartdate",
+        "agreementInitialInvoiceStartdate",
+        "agreementRenewalDateReal",
+        "agreementRenewalActivityCreated",
+        "agreementNextOrderDateReal",
+        "latestOrderCreationDate",
+        "agreementIntervalType",
+        "agreementOrderCreationTime",
+        "willCreateMoreOrders",
+        "noticePeriod",
+        "agreementNotes",
+        "orderSequenceNr",
+        "latestOrderId",
+        "versionNo",
+        "activeVersionId",
     }
 
     def _strip_empty(d: dict) -> dict:
@@ -625,9 +654,13 @@ async def find_agreements(
         {"value": ">=10000"} - High-value agreements
     """
     api_filters = _transform_filters(filters) if filters else {}
+    # WORKAROUND: Upsales API bug (WEB-5367) — the agreement mapper unconditionally
+    # sub-maps obj.metadata, crashing if metadata is missing from the ES _source.
+    # Always include 'metadata' in f[] to prevent the 500 error.
+    api_fields = list(fields) + ["metadata"] if fields else fields
     async with _get_client() as client:
         result, meta = await client.agreements._list_with_metadata(
-            limit=limit, offset=offset, sort=sort, fields=fields, **api_filters
+            limit=limit, offset=offset, sort=sort, fields=api_fields, **api_filters
         )
     total = meta.get("total", len(result))
     return _serialize(result, fields, metadata={"total": total, "count": len(result)})
@@ -690,6 +723,23 @@ async def find_products(
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_me() -> str:
+    """Get the current user's Upsales profile.
+
+    Returns the user profile for the configured UPSALES_USER_ID.
+    Use this to find out who the current user is and their Upsales user ID.
+
+    Returns an error if UPSALES_USER_ID is not configured.
+    """
+    user_id = os.environ.get("UPSALES_USER_ID")
+    if not user_id:
+        return '{"error": "UPSALES_USER_ID not configured"}'
+    async with _get_client() as client:
+        result = await client.users.get(int(user_id))
+    return _serialize(result)
 
 
 @mcp.tool()
