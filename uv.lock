@@ -647,7 +647,7 @@ wheels = [
 [[package]]
 name = "upsales"
 version = "0.1.0"
-source = { git = "https://github.com/AxelOhlander/upsales-python-sdk.git?branch=main#c7c17b47bf9b3780a5734d72dbc8e424c49a3fb5" }
+source = { git = "https://github.com/AxelOhlander/upsales-python-sdk.git?branch=main#0a1790116590502780bae61449d6f89cedf8d982" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
