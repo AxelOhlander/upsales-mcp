@@ -65,6 +65,31 @@ def _get_client() -> Upsales:
     return Upsales(token=_get_api_key())
 
 
+# Operator mapping: MCP filter syntax → Upsales API syntax
+_OPERATOR_MAP = {
+    ">=": "gte:",
+    "<=": "lte:",
+    "!=": "ne:",
+    ">": "gt:",
+    "<": "lt:",
+    "=": "eq:",
+    "*": "src:",
+}
+
+
+def _transform_filters(filters: dict[str, str | int]) -> dict[str, str | int]:
+    """Transform MCP filter operators (>=, <=, *, etc.) to Upsales API syntax."""
+    transformed = {}
+    for field, value in filters.items():
+        if isinstance(value, str):
+            for op, api_op in _OPERATOR_MAP.items():
+                if value.startswith(op):
+                    value = api_op + value[len(op) :]
+                    break
+        transformed[field] = value
+    return transformed
+
+
 def _serialize(obj: object, fields: list[str] | None = None) -> str:
     """Serialize a model or list of models to JSON string.
 
@@ -241,8 +266,12 @@ async def list_companies(
             users, regDate, modDate, journeyStep, turnover, noEmployees
     """
     async with _get_client() as client:
-        result = await client.companies.list(limit=limit, offset=offset, sort=sort, fields=fields)
-    return _serialize(result, fields)
+        result, meta = await client.companies._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} companies"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 @mcp.tool()
@@ -276,9 +305,14 @@ async def search_companies(
         {"name": "*Acme", "active": 1} - Active companies containing "Acme"
         {"regDate": ">=2024-01-01"} - Companies created since 2024
     """
+    api_filters = _transform_filters(filters)
     async with _get_client() as client:
-        result = await client.companies.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit], fields)
+        result, meta = await client.companies._list_with_metadata(
+            limit=limit, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} companies"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 # ---------------------------------------------------------------------------
@@ -317,8 +351,12 @@ async def list_contacts(
             regDate, modDate, active, journeyStep
     """
     async with _get_client() as client:
-        result = await client.contacts.list(limit=limit, offset=offset, sort=sort, fields=fields)
-    return _serialize(result, fields)
+        result, meta = await client.contacts._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} contacts"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 @mcp.tool()
@@ -345,9 +383,14 @@ async def search_contacts(
         {"client.id": 123} - All contacts at company 123
         {"email": "*@acme.com"} - Contacts with acme.com email
     """
+    api_filters = _transform_filters(filters)
     async with _get_client() as client:
-        result = await client.contacts.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit], fields)
+        result, meta = await client.contacts._list_with_metadata(
+            limit=limit, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} contacts"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 # ---------------------------------------------------------------------------
@@ -386,10 +429,12 @@ async def list_appointments(
             client, contact, users, activityType, regDate
     """
     async with _get_client() as client:
-        result = await client.appointments.list(
+        result, meta = await client.appointments._list_with_metadata(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
-    return _serialize(result, fields)
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} appointments"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 @mcp.tool()
@@ -412,13 +457,18 @@ async def search_appointments(
             Example: ['id', 'description', 'date', 'outcome']
 
     Example filters:
-        {"date": ">=2024-03-01", "date": "<=2024-03-31"} - Appointments in March
+        {"date": ">=2025-03-01"} - Appointments since March 2025
         {"outcome": "planned"} - Only planned meetings
         {"client.id": 123} - Meetings for a specific company
     """
+    api_filters = _transform_filters(filters)
     async with _get_client() as client:
-        result = await client.appointments.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit], fields)
+        result, meta = await client.appointments._list_with_metadata(
+            limit=limit, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} appointments"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 # ---------------------------------------------------------------------------
@@ -457,8 +507,12 @@ async def list_phone_calls(
             type, regDate
     """
     async with _get_client() as client:
-        result = await client.phone_calls.list(limit=limit, offset=offset, sort=sort, fields=fields)
-    return _serialize(result, fields)
+        result, meta = await client.phone_calls._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=fields
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} phone calls"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 @mcp.tool()
@@ -484,9 +538,14 @@ async def search_phone_calls(
         {"user.id": 5} - Calls by a specific user
         {"client.id": 123} - Calls for a specific company
     """
+    api_filters = _transform_filters(filters)
     async with _get_client() as client:
-        result = await client.phone_calls.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit], fields)
+        result, meta = await client.phone_calls._list_with_metadata(
+            limit=limit, sort=sort, fields=fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} phone calls"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 # ---------------------------------------------------------------------------
@@ -542,8 +601,12 @@ async def list_orders(
     """
     api_fields = _map_order_fields(fields)
     async with _get_client() as client:
-        result = await client.orders.list(limit=limit, offset=offset, sort=sort, fields=api_fields)
-    return _serialize(result, fields)
+        result, meta = await client.orders._list_with_metadata(
+            limit=limit, offset=offset, sort=sort, fields=api_fields
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} orders"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 @mcp.tool()
@@ -570,10 +633,15 @@ async def search_orders(
         {"date": ">=2024-01-01"} - Orders since 2024
         {"client.id": 123, "probability": ">=50"} - Likely orders for a company
     """
+    api_filters = _transform_filters(filters)
     api_fields = _map_order_fields(fields)
     async with _get_client() as client:
-        result = await client.orders.search(sort=sort, fields=api_fields, **filters)
-    return _serialize(result[:limit], fields)
+        result, meta = await client.orders._list_with_metadata(
+            limit=limit, sort=sort, fields=api_fields, **api_filters
+        )
+    total = meta.get("total", len(result))
+    header = f"Showing {len(result)} of {total} orders"
+    return f"{header}\n{_serialize(result, fields)}"
 
 
 def _build_app():
