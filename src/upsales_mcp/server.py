@@ -65,15 +65,140 @@ def _get_client() -> Upsales:
     return Upsales(token=_get_api_key())
 
 
-def _serialize(obj: object) -> str:
-    """Serialize a model or list of models to JSON string."""
+def _serialize(obj: object, fields: list[str] | None = None) -> str:
+    """Serialize a model or list of models to JSON string.
+
+    Args:
+        obj: A Pydantic model or list of models.
+        fields: If provided, only include these keys in the output (plus 'id' always).
+    """
+    # Exclude computed/noise fields that add no value for AI agents
+    _exclude = {
+        # SDK computed properties
+        "custom_fields",
+        "is_active",
+        "full_name",
+        "has_phone",
+        "contact_count",
+        "is_headquarters",
+        "is_appointment",
+        "has_outcome",
+        "has_weblink",
+        "has_attendees",
+        "attendee_count",
+        "is_locked",
+        "expected_value",
+        "is_recurring",
+        "margin_percentage",
+        # Order: weighted values (= base value * probability/100, always computable)
+        "weightedValue",
+        "weightedOneOffValue",
+        "weightedMonthlyValue",
+        "weightedAnnualValue",
+        "weightedContributionMargin",
+        "weightedContributionMarginLocalCurrency",
+        "weightedValueInMasterCurrency",
+        "weightedOneOffValueInMasterCurrency",
+        "weightedMonthlyValueInMasterCurrency",
+        "weightedAnnualValueInMasterCurrency",
+        # Order: master currency duplicates (= base value when currencyRate=1)
+        "valueInMasterCurrency",
+        "oneOffValueInMasterCurrency",
+        "monthlyValueInMasterCurrency",
+        "annualValueInMasterCurrency",
+        # Order: noise fields
+        "contributionMarginLocalCurrency",
+        "risks",
+        "salesCoach",
+        "checklist",
+        "titleCategories",
+        "projectPlanOptions",
+        "lastIntegrationStatus",
+        "userSalesStatistics",
+        "periodization",
+        # UI permission flags
+        "userEditable",
+        "userRemovable",
+        # Company: internal tracking
+        "excludedFromProspectingMonitor",
+        "isMonitored",
+        "hasVisit",
+        "hasMail",
+        "hasForm",
+        "autoMatchedProspectingId",
+        "prospectingId",
+        "prospectingUpdateDate",
+        "prospectingCreditRating",
+        "prospectingNumericCreditRating",
+        "monitorChangeDate",
+        # Company: low-value nested objects (all zeros/false for most accounts)
+        "growth",
+        "ads",
+        "supportTickets",
+        "scoreUpdateDate",
+        # Contact: internal tracking
+        "isPriority",
+        "emailBounceReason",
+        "mailBounces",
+        "optins",
+        "socialEvent",
+        "connectedClients",
+        # Order: raw custom fields (opaque fieldIds, not useful without metadata)
+        "custom",
+        # Order: activity counters (rarely useful)
+        "noCompletedAppointments",
+        "noPostponedAppointments",
+        "noTimesCallsNotAnswered",
+        "noTimesClosingDateChanged",
+        "noTimesOrderValueChanged",
+    }
+
+    # Keys to strip from nested objects (e.g. orderRow items)
+    _nested_exclude = {
+        "valueInMasterCurrency",
+        "monthlyValueInMasterCurrency",
+        "annualValueInMasterCurrency",
+        "contributionMarginLocalCurrency",
+        "contributionMargin",
+        "bundleFixedPrice",
+        "tierQuantity",
+        "sortId",
+        "bundleRows",
+        "custom",
+        "productId",
+        "purchaseCost",
+        "listPrice",
+    }
+
+    def _strip_empty(d: dict) -> dict:
+        """Recursively strip null/empty values and noise from dicts."""
+        cleaned = {}
+        for k, v in d.items():
+            if v is None or v == [] or v == {} or v == "":
+                continue
+            if k in _nested_exclude:
+                continue
+            if isinstance(v, dict):
+                v = _strip_empty(v)
+                if not v:
+                    continue
+            elif isinstance(v, list):
+                v = [_strip_empty(i) if isinstance(i, dict) else i for i in v]
+            cleaned[k] = v
+        return cleaned
 
     def _dump(item: object) -> dict:
-        return item.model_dump(
+        data = item.model_dump(
             mode="json",
             by_alias=True,
-            exclude={"custom_fields"},
+            exclude=_exclude,
         )
+        if fields:
+            keep = {"id"} | set(fields)
+            data = {k: v for k, v in data.items() if k in keep}
+        # Always clean nested values
+        data = _strip_empty(data)
+        return data
 
     if isinstance(obj, list):
         return json.dumps([_dump(item) for item in obj], indent=2, default=str)
@@ -116,10 +241,8 @@ async def list_companies(
             users, regDate, modDate, journeyStep, turnover, noEmployees
     """
     async with _get_client() as client:
-        result = await client.companies.list(
-            limit=limit, offset=offset, sort=sort, fields=fields
-        )
-    return _serialize(result)
+        result = await client.companies.list(limit=limit, offset=offset, sort=sort, fields=fields)
+    return _serialize(result, fields)
 
 
 @mcp.tool()
@@ -155,7 +278,7 @@ async def search_companies(
     """
     async with _get_client() as client:
         result = await client.companies.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit])
+    return _serialize(result[:limit], fields)
 
 
 # ---------------------------------------------------------------------------
@@ -194,10 +317,8 @@ async def list_contacts(
             regDate, modDate, active, journeyStep
     """
     async with _get_client() as client:
-        result = await client.contacts.list(
-            limit=limit, offset=offset, sort=sort, fields=fields
-        )
-    return _serialize(result)
+        result = await client.contacts.list(limit=limit, offset=offset, sort=sort, fields=fields)
+    return _serialize(result, fields)
 
 
 @mcp.tool()
@@ -226,7 +347,7 @@ async def search_contacts(
     """
     async with _get_client() as client:
         result = await client.contacts.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit])
+    return _serialize(result[:limit], fields)
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +389,7 @@ async def list_appointments(
         result = await client.appointments.list(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
-    return _serialize(result)
+    return _serialize(result, fields)
 
 
 @mcp.tool()
@@ -297,7 +418,7 @@ async def search_appointments(
     """
     async with _get_client() as client:
         result = await client.appointments.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit])
+    return _serialize(result[:limit], fields)
 
 
 # ---------------------------------------------------------------------------
@@ -336,10 +457,8 @@ async def list_phone_calls(
             type, regDate
     """
     async with _get_client() as client:
-        result = await client.phone_calls.list(
-            limit=limit, offset=offset, sort=sort, fields=fields
-        )
-    return _serialize(result)
+        result = await client.phone_calls.list(limit=limit, offset=offset, sort=sort, fields=fields)
+    return _serialize(result, fields)
 
 
 @mcp.tool()
@@ -367,12 +486,24 @@ async def search_phone_calls(
     """
     async with _get_client() as client:
         result = await client.phone_calls.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit])
+    return _serialize(result[:limit], fields)
 
 
 # ---------------------------------------------------------------------------
 # Orders
 # ---------------------------------------------------------------------------
+
+# Upsales API bug: using f[]=value drops the field from the response because the
+# f[] parser resolves 'value' -> 'orderValue' for the ES query, but the response
+# mapper then fails to rename it back. Workaround: send f[]=orderValue instead.
+_ORDER_FIELD_MAP = {"value": "orderValue"}
+
+
+def _map_order_fields(fields: list[str] | None) -> list[str] | None:
+    """Map user-facing order field names to API internal names for f[] param."""
+    if not fields:
+        return fields
+    return [_ORDER_FIELD_MAP.get(f, f) for f in fields]
 
 
 @mcp.tool()
@@ -405,11 +536,10 @@ async def list_orders(
             Common fields: id, description, date, value, probability, currency,
             client, contact, user, stage, orderRow, regDate, modDate
     """
+    api_fields = _map_order_fields(fields)
     async with _get_client() as client:
-        result = await client.orders.list(
-            limit=limit, offset=offset, sort=sort, fields=fields
-        )
-    return _serialize(result)
+        result = await client.orders.list(limit=limit, offset=offset, sort=sort, fields=api_fields)
+    return _serialize(result, fields)
 
 
 @mcp.tool()
@@ -436,14 +566,14 @@ async def search_orders(
         {"date": ">=2024-01-01"} - Orders since 2024
         {"client.id": 123, "probability": ">=50"} - Likely orders for a company
     """
+    api_fields = _map_order_fields(fields)
     async with _get_client() as client:
-        result = await client.orders.search(sort=sort, fields=fields, **filters)
-    return _serialize(result[:limit])
+        result = await client.orders.search(sort=sort, fields=api_fields, **filters)
+    return _serialize(result[:limit], fields)
 
 
 def _build_app():
     """Build ASGI app with auth middleware for hosted mode."""
-    from starlette.middleware import Middleware
     from starlette.middleware.base import BaseHTTPMiddleware
     from starlette.requests import Request
     from starlette.responses import JSONResponse
