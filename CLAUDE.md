@@ -22,12 +22,12 @@ No test suite exists yet.
 
 Single-file server at `src/upsales_mcp/server.py`. All logic lives here:
 
-- **FastMCP instance** (`mcp`) registered with 10 tools: get/search for each of 5 entities (companies, contacts, appointments, phone calls, orders)
+- **FastMCP instance** (`mcp`) registered with 10 tools: get/find for each of 5 entities (companies, contacts, appointments, phone calls, orders)
 - **Auth**: In hosted mode, `BearerAuthMiddleware` extracts the Upsales API key from the Authorization header and stores it in a `contextvars.ContextVar`. In stdio mode, reads `UPSALES_API_KEY` from env.
 - **`_get_client()`** creates a new `Upsales` SDK client per request using the resolved API key
 - **`_serialize()`** converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection and metadata
 - **`_transform_filters()`** converts operator prefixes (`>=`, `>`, `<=`, `<`, `!=`, `*`) to Upsales API syntax, supports list values for range queries on the same field
-- **Search tools** accept optional `filters`, `fields`, `sort`, `limit`, `offset` — filters is optional so they double as list tools
+- **Find tools** accept optional `filters`, `fields`, `sort`, `limit`, `offset` — filters is optional so they double as list tools
 
 The `upsales` SDK dependency is pinned to a private GitHub repo (`AxelOhlander/upsales-python-sdk`). Docker builds require a `GITHUB_TOKEN` build arg to access it.
 

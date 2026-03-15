@@ -1,7 +1,7 @@
 """Upsales CRM MCP Server.
 
 Exposes Upsales CRM objects (contacts, companies, appointments, phone calls, orders)
-as MCP tools for get and search operations.
+as MCP tools for get and find operations.
 
 Supports two modes:
 - Local (stdio): API key from UPSALES_API_KEY env var
@@ -36,7 +36,7 @@ mcp = FastMCP(
     instructions=(
         "Upsales CRM server providing read access to contacts, companies, "
         "appointments (meetings), phone calls, and orders. "
-        "Use search tools with filter operators like >=, <=, !=, *value for contains. "
+        "Use find tools with filter operators like >=, <=, !=, *value for contains. "
         "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
         "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']."
@@ -285,14 +285,14 @@ async def get_company(company_id: int) -> str:
 
 
 @mcp.tool()
-async def search_companies(
+async def find_companies(
     filters: dict[str, str | int | list[str]] | None = None,
     sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     fields: list[str] | None = None,
 ) -> str:
-    """Search companies with optional filters and pagination.
+    """Find companies with optional filters and pagination.
 
     Filter operators:
         field: value         - Equals
@@ -352,14 +352,14 @@ async def get_contact(contact_id: int) -> str:
 
 
 @mcp.tool()
-async def search_contacts(
+async def find_contacts(
     filters: dict[str, str | int | list[str]] | None = None,
     sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     fields: list[str] | None = None,
 ) -> str:
-    """Search contacts with optional filters and pagination.
+    """Find contacts with optional filters and pagination.
 
     Common filter fields: name, email, phone, title, client.id (company ID),
     regDate, modDate, active, journeyStep
@@ -406,14 +406,14 @@ async def get_appointment(appointment_id: int) -> str:
 
 
 @mcp.tool()
-async def search_appointments(
+async def find_appointments(
     filters: dict[str, str | int | list[str]] | None = None,
     sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     fields: list[str] | None = None,
 ) -> str:
-    """Search appointments/meetings with optional filters and pagination.
+    """Find appointments/meetings with optional filters and pagination.
 
     Common filter fields: description, date, endDate, outcome (planned/completed/notCompleted),
     client.id (company ID), user.id, activityType.id, location
@@ -460,14 +460,14 @@ async def get_phone_call(phone_call_id: int) -> str:
 
 
 @mcp.tool()
-async def search_phone_calls(
+async def find_phone_calls(
     filters: dict[str, str | int | list[str]] | None = None,
     sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     fields: list[str] | None = None,
 ) -> str:
-    """Search phone calls with optional filters and pagination.
+    """Find phone calls with optional filters and pagination.
 
     Common filter fields: user.id, client.id (company ID), contact.id,
     regDate, type, duration
@@ -529,14 +529,14 @@ async def get_order(order_id: int) -> str:
 
 
 @mcp.tool()
-async def search_orders(
+async def find_orders(
     filters: dict[str, str | int | list[str]] | None = None,
     sort: str | None = None,
     limit: int = 50,
     offset: int = 0,
     fields: list[str] | None = None,
 ) -> str:
-    """Search orders with optional filters and pagination.
+    """Find orders with optional filters and pagination.
 
     Common filter fields: description, date, client.id (company ID), user.id,
     stage.id, probability, value, currency, regDate, modDate
