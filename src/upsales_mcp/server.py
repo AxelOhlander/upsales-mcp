@@ -90,12 +90,13 @@ def _transform_filters(filters: dict[str, str | int]) -> dict[str, str | int]:
     return transformed
 
 
-def _serialize(obj: object, fields: list[str] | None = None) -> str:
+def _serialize(obj: object, fields: list[str] | None = None, metadata: dict | None = None) -> str:
     """Serialize a model or list of models to JSON string.
 
     Args:
         obj: A Pydantic model or list of models.
         fields: If provided, only include these keys in the output (plus 'id' always).
+        metadata: If provided, wraps output in {"metadata": ..., "data": ...}.
     """
     # Exclude computed/noise fields that add no value for AI agents
     _exclude = {
@@ -226,7 +227,10 @@ def _serialize(obj: object, fields: list[str] | None = None) -> str:
         return data
 
     if isinstance(obj, list):
-        return json.dumps([_dump(item) for item in obj], indent=2, default=str)
+        items = [_dump(item) for item in obj]
+        if metadata:
+            return json.dumps({"metadata": metadata, "data": items}, indent=2, default=str)
+        return json.dumps(items, indent=2, default=str)
     return json.dumps(_dump(obj), indent=2, default=str)
 
 
@@ -270,8 +274,7 @@ async def list_companies(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} companies"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 @mcp.tool()
@@ -311,8 +314,7 @@ async def search_companies(
             limit=limit, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} companies"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 # ---------------------------------------------------------------------------
@@ -355,8 +357,7 @@ async def list_contacts(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} contacts"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 @mcp.tool()
@@ -389,8 +390,7 @@ async def search_contacts(
             limit=limit, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} contacts"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 # ---------------------------------------------------------------------------
@@ -433,8 +433,7 @@ async def list_appointments(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} appointments"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 @mcp.tool()
@@ -467,8 +466,7 @@ async def search_appointments(
             limit=limit, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} appointments"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 # ---------------------------------------------------------------------------
@@ -511,8 +509,7 @@ async def list_phone_calls(
             limit=limit, offset=offset, sort=sort, fields=fields
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} phone calls"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 @mcp.tool()
@@ -544,8 +541,7 @@ async def search_phone_calls(
             limit=limit, sort=sort, fields=fields, **api_filters
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} phone calls"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 # ---------------------------------------------------------------------------
@@ -605,8 +601,7 @@ async def list_orders(
             limit=limit, offset=offset, sort=sort, fields=api_fields
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} orders"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 @mcp.tool()
@@ -640,8 +635,7 @@ async def search_orders(
             limit=limit, sort=sort, fields=api_fields, **api_filters
         )
     total = meta.get("total", len(result))
-    header = f"Showing {len(result)} of {total} orders"
-    return f"{header}\n{_serialize(result, fields)}"
+    return _serialize(result, fields, metadata={"total": total, "count": len(result)})
 
 
 def _build_app():
