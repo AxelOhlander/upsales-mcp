@@ -16,19 +16,25 @@ uv run ruff format src/              # Format
 MCP_TRANSPORT=streamable-http uv run upsales-mcp  # Run in hosted HTTP mode
 ```
 
-No test suite exists yet.
+```bash
+uv run pytest tests/ -v               # Run tests
+```
 
 ## Architecture
 
-Single-file server at `src/upsales_mcp/server.py`. All logic lives here:
+Modular layout under `src/upsales_mcp/`:
 
-- **FastMCP instance** (`mcp`) registered with 21 tools: get/find for each of 10 entities + `get_me`
+- **`server.py`** — FastMCP instance (`mcp`), auth (contextvar, Bearer middleware, `_get_client()`), `main()` entrypoint
+- **`tools.py`** — 22 tool definitions (get/find for 10 entities + `get_me`), error handling decorator, pagination metadata
   - Entities: companies, contacts, appointments, phone calls, orders, mail, activities, agreements, products, users
-- **Auth**: In hosted mode, `BearerAuthMiddleware` extracts the Upsales API key from the Authorization header and stores it in a `contextvars.ContextVar`. In stdio mode, reads `UPSALES_API_KEY` from env.
-- **User identity**: `UPSALES_USER_ID` env var injects user context into MCP instructions so "my meetings" queries work. `get_me` tool returns the current user's profile.
-- **`_get_client()`** creates a new `Upsales` SDK client per request using the resolved API key
-- **`_serialize()`** converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection and metadata (`{"metadata": {"total": N, "count": N}, "data": [...]}`)
-- **`_transform_filters()`** converts operator prefixes (`>=`, `>`, `<=`, `<`, `!=`, `*`) to Upsales API syntax, supports list values for range queries on the same field (e.g. `{"date": [">=2025-01-01", "<=2025-01-31"]}`)
+- **`serialize.py`** — `serialize()` converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection and metadata
+- **`filters.py`** — `transform_filters()` converts operator prefixes (`>=`, `>`, `<=`, `<`, `!=`, `*`) to Upsales API syntax, supports list values for range queries
+- **`cache.py`** — Simple TTL cache (5 min) for user and product lookups that rarely change
+
+Key patterns:
+- **Error handling**: All tools wrapped with `@handle_errors` — SDK exceptions return `{"error": "...", "type": "..."}` instead of tracebacks
+- **Pagination hints**: Find tools return `hasMore`, `nextOffset`, `remaining` in metadata when more results exist
+- **Caching**: `get_user`, `find_users`, `get_product`, `find_products`, `get_me` are cached per API key for 5 minutes
 - **Find tools** accept optional `filters`, `fields`, `sort`, `limit`, `offset` — filters is optional so they double as list tools
 
 The `upsales` SDK dependency is pinned to a private GitHub repo (`AxelOhlander/upsales-python-sdk`). Docker builds require a `GITHUB_TOKEN` build arg to access it. For local development, switch `pyproject.toml` to `upsales = { path = "../upsales-python-sdk", editable = true }` for instant SDK changes without pushing.

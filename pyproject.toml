@@ -13,7 +13,7 @@ dependencies = [
 upsales-mcp = "upsales_mcp.server:main"
 
 [tool.uv.sources]
-upsales = { git = "https://github.com/AxelOhlander/upsales-python-sdk.git", branch = "main" }
+upsales = { path = "../upsales-python-sdk", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -22,6 +22,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "ruff>=0.15.6",
+    "pytest>=8.0",
 ]
 
 [tool.hatch.build.targets.wheel]
