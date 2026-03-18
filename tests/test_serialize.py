@@ -110,3 +110,36 @@ class TestSerialize:
         assert "agreementNotes" not in meta
         assert "versionNo" not in meta
         assert meta["startDate"] == "2026-01-01"
+
+    def test_dot_notation_fields_keep_parent(self):
+        """Dot-notation fields like 'orderRow.product.id' should keep the top-level key."""
+        model = MockModel(
+            {
+                "id": 1,
+                "description": "Test order",
+                "value": 1000,
+                "orderRow": [{"product": {"id": 5, "name": "Widget"}, "quantity": 2, "price": 500}],
+            }
+        )
+        result = json.loads(
+            serialize(
+                model, fields=["orderRow.product.id", "orderRow.product.name", "orderRow.price"]
+            )
+        )
+        assert "orderRow" in result
+        assert "id" in result
+        assert "description" not in result
+        assert "value" not in result
+
+    def test_dot_notation_mixed_with_flat_fields(self):
+        """Mix of flat and dot-notation fields should work together."""
+        model = MockModel(
+            {
+                "id": 1,
+                "description": "Test",
+                "value": 500,
+                "orderRow": [{"product": {"id": 1}, "price": 100}],
+            }
+        )
+        result = json.loads(serialize(model, fields=["value", "orderRow.product.id"]))
+        assert set(result.keys()) == {"id", "value", "orderRow"}

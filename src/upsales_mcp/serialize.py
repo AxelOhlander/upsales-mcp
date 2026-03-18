@@ -185,7 +185,10 @@ def serialize(
             exclude=EXCLUDE_FIELDS,
         )
         if fields:
-            keep = {"id"} | set(fields)
+            # Support dot-notation: "orderRow.product.id" keeps top-level "orderRow"
+            keep = {"id"}
+            for f in fields:
+                keep.add(f.split(".")[0])
             data = {k: v for k, v in data.items() if k in keep}
         data = _strip_empty(data)
         return data
