@@ -15,15 +15,25 @@ from mcp.server.fastmcp import FastMCP
 
 from upsales import Upsales
 
-# Store the Bearer token per-request via contextvar
+# Store per-request state via contextvars
 _current_api_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "_current_api_key", default=None
+)
+_current_user_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_user_id", default=None
 )
 
 
 def _is_hosted() -> bool:
     """Check if running in hosted mode (streamable HTTP)."""
     return os.environ.get("MCP_TRANSPORT", "stdio") == "streamable-http"
+
+
+def _get_user_id() -> str | None:
+    """Get the Upsales user ID from header (hosted) or env var (local)."""
+    if _is_hosted():
+        return _current_user_id.get()
+    return os.environ.get("UPSALES_USER_ID")
 
 
 def _build_instructions() -> str:
@@ -37,7 +47,7 @@ def _build_instructions() -> str:
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
         "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']."
     )
-    user_id = os.environ.get("UPSALES_USER_ID")
+    user_id = _get_user_id()
     if user_id:
         base += (
             f" The current user's Upsales user ID is {user_id}."
@@ -91,6 +101,9 @@ def _build_app():
                 token = auth_header[7:].strip()
                 if token:
                     _current_api_key.set(token)
+                    user_id = request.headers.get("x-upsales-user-id", "").strip()
+                    if user_id:
+                        _current_user_id.set(user_id)
                     return await call_next(request)
             return JSONResponse(
                 status_code=401,

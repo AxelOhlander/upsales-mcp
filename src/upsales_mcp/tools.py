@@ -5,12 +5,11 @@ All get/find tools for each entity are registered here on the shared `mcp` insta
 
 import functools
 import json
-import os
 
 from upsales_mcp import cache
 from upsales_mcp.filters import map_order_fields, transform_filters
 from upsales_mcp.serialize import serialize
-from upsales_mcp.server import mcp, _get_api_key, _get_client
+from upsales_mcp.server import mcp, _get_api_key, _get_client, _get_user_id
 
 
 # ---------------------------------------------------------------------------
@@ -486,9 +485,9 @@ async def get_me() -> str:
 
     Returns an error if UPSALES_USER_ID is not configured.
     """
-    user_id = os.environ.get("UPSALES_USER_ID")
+    user_id = _get_user_id()
     if not user_id:
-        return '{"error": "UPSALES_USER_ID not configured", "type": "ConfigError"}'
+        return '{"error": "UPSALES_USER_ID not configured. Send X-Upsales-User-Id header (hosted) or set UPSALES_USER_ID env var (local).", "type": "ConfigError"}'
 
     api_key = _get_api_key()
     cache_key = cache.make_key("get_me", api_key, user_id)

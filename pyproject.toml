@@ -13,7 +13,7 @@ dependencies = [
 upsales-mcp = "upsales_mcp.server:main"
 
 [tool.uv.sources]
-upsales = { path = "../upsales-python-sdk", editable = true }
+upsales = { git = "https://github.com/AxelOhlander/upsales-python-sdk" }
 
 [build-system]
 requires = ["hatchling"]
