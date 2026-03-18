@@ -45,7 +45,9 @@ def _build_instructions() -> str:
         "Use find tools with filter operators like >=, <=, !=, *value for contains. "
         "All date filters use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
         "IMPORTANT: Always use the 'fields' parameter to request only the fields you need. "
-        "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']."
+        "This dramatically reduces response size. Example: fields=['id', 'name', 'phone']. "
+        "For nested data like order rows, use dot-notation: "
+        "fields=['id', 'orderRow.product.id', 'orderRow.product.name', 'orderRow.price']."
     )
     user_id = _get_user_id()
     if user_id:

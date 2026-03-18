@@ -667,14 +667,21 @@ async def find_orders(
         limit: Max results (default 50, max 1000).
         offset: Pagination offset.
         fields: List of field names to return. Reduces response size significantly.
+            Supports dot-notation for nested fields (e.g. 'orderRow.product.id').
             Example: ['id', 'description', 'date', 'value', 'probability']
             Common fields: id, description, date, value, probability, currency,
             client, contact, user, stage, orderRow, regDate, modDate
+            Nested orderRow fields: orderRow.product.id, orderRow.product.name,
+            orderRow.price, orderRow.quantity, orderRow.discount
 
     Example filters:
         {"stage.id": 5} - Orders at a specific stage
         {"date": ">=2024-01-01"} - Orders since 2024
         {"client.id": 123, "probability": ">=50"} - Likely orders for a company
+
+    Tip: For analytics (e.g. best-selling products), use sparse nested fields:
+        fields=['id', 'orderRow.product.id', 'orderRow.product.name',
+                'orderRow.price', 'orderRow.quantity']
     """
     api_filters = transform_filters(filters) if filters else {}
     api_fields = map_order_fields(fields)
