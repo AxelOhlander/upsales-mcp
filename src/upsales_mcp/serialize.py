@@ -103,8 +103,8 @@ EXCLUDE_FIELDS = {
     "invoiceRelatedClient",
     "priceListId",
     "agreementGroupId",
-    # Order/Agreement: raw custom fields (opaque fieldIds, not useful without metadata)
-    "custom",
+    # Order/Agreement: raw custom fields — resolved inline when definitions are available,
+    # excluded only as a fallback (see custom_field_defs parameter on serialize()).
     # Order: activity counters (rarely useful)
     "noCompletedAppointments",
     "noPostponedAppointments",
@@ -165,17 +165,51 @@ def _strip_empty(d: dict) -> dict:
     return cleaned
 
 
+def _resolve_custom_fields(raw_custom: list[dict], definitions: dict[int, dict]) -> dict:
+    """Resolve raw custom field entries to a named dict.
+
+    Returns:
+        Dict keyed by field name, e.g.:
+        {"Delivery Date": {"value": "2026-03-14", "fieldId": 42, "type": "Date"}}
+    """
+    resolved = {}
+    for entry in raw_custom:
+        field_id = entry.get("fieldId")
+        if not field_id or field_id not in definitions:
+            continue
+        defn = definitions[field_id]
+        # Pick the first non-None typed value (matches SDK CustomFields logic)
+        value = (
+            entry.get("value")
+            or entry.get("valueInteger")
+            or entry.get("valueDate")
+            or entry.get("valueArray")
+        )
+        if value is None:
+            continue
+        resolved[defn["name"]] = {
+            "value": value,
+            "fieldId": field_id,
+            "type": defn["type"],
+        }
+    return resolved
+
+
 def serialize(
     obj: object,
     fields: list[str] | None = None,
     metadata: dict | None = None,
+    custom_field_defs: dict[int, dict] | None = None,
 ) -> str:
     """Serialize a model or list of models to JSON string.
 
     Args:
         obj: A Pydantic model or list of models.
         fields: If provided, only include these keys in the output (plus 'id' always).
+            Use 'customFields' or 'custom' to include resolved custom fields.
         metadata: If provided, wraps output in {"metadata": ..., "data": ...}.
+        custom_field_defs: If provided, resolves raw custom field data to named values.
+            Dict mapping fieldId -> {"name": str, "type": str, "alias": str|None}.
     """
 
     def _dump(item: object) -> dict:
@@ -184,11 +218,24 @@ def serialize(
             by_alias=True,
             exclude=EXCLUDE_FIELDS,
         )
+
+        # Resolve custom fields before field selection
+        raw_custom = data.pop("custom", None)
+        if custom_field_defs and raw_custom:
+            resolved = _resolve_custom_fields(raw_custom, custom_field_defs)
+            if resolved:
+                data["customFields"] = resolved
+        # If no definitions available, raw 'custom' is already popped (excluded)
+
         if fields:
             # Support dot-notation: "orderRow.product.id" keeps top-level "orderRow"
             keep = {"id"}
             for f in fields:
                 keep.add(f.split(".")[0])
+            # Treat 'custom' in field list as requesting resolved 'customFields'
+            if "custom" in keep:
+                keep.discard("custom")
+                keep.add("customFields")
             data = {k: v for k, v in data.items() if k in keep}
         data = _strip_empty(data)
         return data

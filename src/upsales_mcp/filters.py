@@ -36,8 +36,22 @@ def transform_filters(
     # re-parse already-transformed values when merging into q[].
     simple_parsed: dict[str, tuple[str, str | int]] = {}
     q_conditions: list[dict] = []
+    # Custom field filters: custom.FIELD_ID → Upsales "custom" shortcut param
+    custom_conditions: list[str] = []
 
     for field, value in filters.items():
+        # Handle custom field filters: custom.FIELD_ID
+        if field.startswith("custom."):
+            field_id = field.split(".", 1)[1]
+            if isinstance(value, list):
+                for v in value:
+                    comp, raw = parse_op(str(v))
+                    custom_conditions.append(f"{comp}:{field_id}:{raw}")
+            else:
+                comp, raw = parse_op(str(value))
+                custom_conditions.append(f"{comp}:{field_id}:{raw}")
+            continue
+
         if isinstance(value, list):
             # Multiple conditions on same field → must use q[] syntax
             for v in value:
@@ -59,10 +73,17 @@ def transform_filters(
         # Merge simple filters into q[] using pre-parsed values
         for field, (comp, raw) in simple_parsed.items():
             q_conditions.append({"a": field, "c": comp, "v": raw})
-        # API expects repeated q[] params, each a JSON-encoded condition object
-        return {"q[]": [json.dumps(c) for c in q_conditions]}
+        result: dict = {"q[]": [json.dumps(c) for c in q_conditions]}
+    else:
+        result = simple
 
-    return simple
+    # Add custom field conditions as the "custom" API parameter
+    if len(custom_conditions) == 1:
+        result["custom"] = custom_conditions[0]
+    elif custom_conditions:
+        result["custom"] = custom_conditions
+
+    return result
 
 
 # WORKAROUND: Upsales API bug (WEB-5366) — f[]=value drops the field from the

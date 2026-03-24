@@ -1,6 +1,6 @@
 # Upsales CRM MCP Server
 
-MCP server that exposes Upsales CRM data (companies, contacts, appointments, phone calls, orders) as read-only tools.
+MCP server that exposes Upsales CRM data as read-only tools. Supports 10 entity types with get/find operations, custom field resolution, and flexible filtering.
 
 Supports two modes:
 - **Local (stdio)**: API key from environment variable, for personal use
@@ -48,8 +48,7 @@ Each user authenticates with their own Upsales API key via `Authorization: Beare
 |----------|----------|---------|-------------|
 | `MCP_TRANSPORT` | Yes | `stdio` | Set to `streamable-http` for hosted mode |
 | `PORT` | No | `8000` | HTTP port (Railway sets this automatically) |
-| `AUTH_ISSUER_URL` | No | `https://upsales-mcp.up.railway.app` | OAuth issuer URL for metadata |
-| `AUTH_RESOURCE_URL` | No | `https://upsales-mcp.up.railway.app` | OAuth resource server URL |
+| `UPSALES_USER_ID` | No | — | Current user's Upsales ID (enables "my meetings" queries) |
 
 ### Deploy to Railway
 
@@ -77,27 +76,55 @@ Each user authenticates with their own Upsales API key via `Authorization: Beare
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `get_company` | Get a company by ID |
-| `list_companies` | List companies with pagination |
-| `search_companies` | Search companies with filters |
-| `get_contact` | Get a contact by ID |
-| `list_contacts` | List contacts with pagination |
-| `search_contacts` | Search contacts with filters |
-| `get_appointment` | Get an appointment/meeting by ID |
-| `list_appointments` | List appointments with pagination |
-| `search_appointments` | Search appointments with filters |
-| `get_phone_call` | Get a phone call by ID |
-| `list_phone_calls` | List phone calls with pagination |
-| `search_phone_calls` | Search phone calls with filters |
-| `get_order` | Get an order by ID |
-| `list_orders` | List orders with pagination |
-| `search_orders` | Search orders with filters |
+Each entity has a `get_*` tool (by ID) and a `find_*` tool (search/list with filters, pagination, field selection).
 
-## Search Filter Operators
+| Entity | Get | Find | Custom Fields |
+|--------|-----|------|---------------|
+| Companies | `get_company` | `find_companies` | Yes |
+| Contacts | `get_contact` | `find_contacts` | Yes |
+| Appointments | `get_appointment` | `find_appointments` | Yes |
+| Phone Calls | `get_phone_call` | `find_phone_calls` | — |
+| Orders | `get_order` | `find_orders` | Yes |
+| Mail | `get_mail` | `find_mail` | — |
+| Activities | `get_activity` | `find_activities` | Yes |
+| Agreements | `get_agreement` | `find_agreements` | Yes |
+| Products | `get_product` | `find_products` | Yes |
+| Users | `get_user` | `find_users` | — |
 
-All search tools accept a `filters` dict with these operators:
+Plus: `get_me` (current user profile) and `find_custom_fields` (discover custom field definitions for any entity).
+
+### Custom Fields
+
+Entities with custom fields show resolved values inline:
+
+```json
+{
+  "id": 123,
+  "name": "Acme Corp",
+  "customFields": {
+    "Industry": {"value": "SaaS", "fieldId": 11, "type": "Select"},
+    "Delivery Date": {"value": "2026-03-14", "fieldId": 42, "type": "Date"}
+  }
+}
+```
+
+Use `find_custom_fields("company")` to discover available fields, then filter with `custom.FIELD_ID` syntax:
+
+```json
+{"custom.42": ">=2026-04-14"}
+```
+
+### Field Selection
+
+Use the `fields` parameter to reduce response size. Supports dot-notation for nested data:
+
+```json
+fields: ["id", "description", "value", "orderRow.product.name", "orderRow.price"]
+```
+
+## Filter Operators
+
+All find tools accept a `filters` dict with these operators:
 
 | Syntax | Meaning |
 |--------|---------|
@@ -108,6 +135,12 @@ All search tools accept a `filters` dict with these operators:
 | `{"field": "<value"}` | Less than |
 | `{"field": "!=value"}` | Not equals |
 | `{"field": "*value"}` | Contains (substring) |
+
+For range queries on the same field, use a list:
+
+```json
+{"date": [">=2026-03-01", "<=2026-03-31"]}
+```
 
 ### Examples
 
@@ -123,4 +156,7 @@ All search tools accept a `filters` dict with these operators:
 
 // Planned meetings for a user
 {"outcome": "planned", "user.id": 5}
+
+// Orders with custom field 42 on or after a date
+{"custom.42": ">=2026-04-14"}
 ```

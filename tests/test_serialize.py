@@ -143,3 +143,104 @@ class TestSerialize:
         )
         result = json.loads(serialize(model, fields=["value", "orderRow.product.id"]))
         assert set(result.keys()) == {"id", "value", "orderRow"}
+
+
+class TestCustomFieldResolution:
+    DEFS = {
+        42: {"name": "Delivery Date", "type": "Date", "alias": "DELIVERY"},
+        11: {"name": "Industry", "type": "Select", "alias": "INDUSTRY"},
+    }
+
+    def test_resolves_custom_fields(self):
+        model = MockModel(
+            {
+                "id": 1,
+                "name": "Acme",
+                "custom": [
+                    {"fieldId": 42, "value": None, "valueDate": "2026-03-14"},
+                    {"fieldId": 11, "value": "SaaS"},
+                ],
+            }
+        )
+        result = json.loads(serialize(model, custom_field_defs=self.DEFS))
+        assert "customFields" in result
+        assert result["customFields"]["Delivery Date"] == {
+            "value": "2026-03-14",
+            "fieldId": 42,
+            "type": "Date",
+        }
+        assert result["customFields"]["Industry"] == {
+            "value": "SaaS",
+            "fieldId": 11,
+            "type": "Select",
+        }
+        assert "custom" not in result
+
+    def test_skips_unknown_field_ids(self):
+        model = MockModel(
+            {
+                "id": 1,
+                "custom": [{"fieldId": 999, "value": "unknown"}],
+            }
+        )
+        result = json.loads(serialize(model, custom_field_defs=self.DEFS))
+        assert "customFields" not in result
+
+    def test_skips_null_values(self):
+        model = MockModel(
+            {
+                "id": 1,
+                "custom": [{"fieldId": 42, "value": None}],
+            }
+        )
+        result = json.loads(serialize(model, custom_field_defs=self.DEFS))
+        assert "customFields" not in result
+
+    def test_excluded_without_defs(self):
+        """Raw custom data is excluded when no definitions are provided."""
+        model = MockModel(
+            {
+                "id": 1,
+                "custom": [{"fieldId": 42, "value": "test"}],
+            }
+        )
+        result = json.loads(serialize(model))
+        assert "custom" not in result
+        assert "customFields" not in result
+
+    def test_field_selection_with_custom_fields(self):
+        model = MockModel(
+            {
+                "id": 1,
+                "name": "Acme",
+                "custom": [{"fieldId": 11, "value": "SaaS"}],
+            }
+        )
+        result = json.loads(
+            serialize(model, fields=["name", "customFields"], custom_field_defs=self.DEFS)
+        )
+        assert result["name"] == "Acme"
+        assert "customFields" in result
+        assert result["customFields"]["Industry"]["value"] == "SaaS"
+
+    def test_field_selection_custom_alias(self):
+        """'custom' in fields list is treated as 'customFields'."""
+        model = MockModel(
+            {
+                "id": 1,
+                "custom": [{"fieldId": 11, "value": "SaaS"}],
+            }
+        )
+        result = json.loads(serialize(model, fields=["custom"], custom_field_defs=self.DEFS))
+        assert "customFields" in result
+
+    def test_field_selection_excludes_custom_when_not_requested(self):
+        model = MockModel(
+            {
+                "id": 1,
+                "name": "Acme",
+                "custom": [{"fieldId": 11, "value": "SaaS"}],
+            }
+        )
+        result = json.loads(serialize(model, fields=["name"], custom_field_defs=self.DEFS))
+        assert "customFields" not in result

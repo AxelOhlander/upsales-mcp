@@ -84,6 +84,44 @@ class TestTransformFilters:
         result = transform_filters({})
         assert result == {}
 
+    def test_custom_field_equality(self):
+        result = transform_filters({"custom.42": "2026-03-14"})
+        assert result == {"custom": "eq:42:2026-03-14"}
+
+    def test_custom_field_with_operator(self):
+        result = transform_filters({"custom.42": ">=2026-04-14"})
+        assert result == {"custom": "gte:42:2026-04-14"}
+
+    def test_custom_field_search(self):
+        result = transform_filters({"custom.11": "*SaaS"})
+        assert result == {"custom": "src:11:SaaS"}
+
+    def test_custom_field_range(self):
+        result = transform_filters({"custom.42": [">=2026-01-01", "<=2026-12-31"]})
+        assert result["custom"] == ["gte:42:2026-01-01", "lte:42:2026-12-31"]
+
+    def test_custom_field_with_regular_filters(self):
+        result = transform_filters({"name": "*Acme", "custom.42": "2026-03-14"})
+        assert result["name"] == "src:Acme"
+        assert result["custom"] == "eq:42:2026-03-14"
+
+    def test_custom_field_with_q_conditions(self):
+        """Custom fields stay separate from q[] conditions."""
+        result = transform_filters(
+            {
+                "date": [">=2026-01-01", "<=2026-12-31"],
+                "custom.42": "test",
+            }
+        )
+        assert "q[]" in result
+        assert result["custom"] == "eq:42:test"
+
+    def test_multiple_custom_fields(self):
+        result = transform_filters({"custom.42": "val1", "custom.11": "val2"})
+        assert isinstance(result["custom"], list)
+        assert "eq:42:val1" in result["custom"]
+        assert "eq:11:val2" in result["custom"]
+
 
 # --- map_order_fields ---
 

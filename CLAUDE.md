@@ -25,16 +25,18 @@ uv run pytest tests/ -v               # Run tests
 Modular layout under `src/upsales_mcp/`:
 
 - **`server.py`** — FastMCP instance (`mcp`), auth (contextvar, Bearer middleware, `_get_client()`), `main()` entrypoint
-- **`tools.py`** — 22 tool definitions (get/find for 10 entities + `get_me`), error handling decorator, pagination metadata
+- **`tools.py`** — 22 tool definitions (get/find for 10 entities + `get_me` + `find_custom_fields`), error handling decorator, pagination metadata, custom field resolution
   - Entities: companies, contacts, appointments, phone calls, orders, mail, activities, agreements, products, users
-- **`serialize.py`** — `serialize()` converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection and metadata
-- **`filters.py`** — `transform_filters()` converts operator prefixes (`>=`, `>`, `<=`, `<`, `!=`, `*`) to Upsales API syntax, supports list values for range queries
-- **`cache.py`** — Simple TTL cache (5 min) for user and product lookups that rarely change
+- **`serialize.py`** — `serialize()` converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection, dot-notation nested fields, metadata wrapping, and inline custom field resolution
+- **`filters.py`** — `transform_filters()` converts operator prefixes (`>=`, `>`, `<=`, `<`, `!=`, `*`) to Upsales API syntax, supports list values for range queries and `custom.FIELD_ID` filters
+- **`cache.py`** — Simple TTL cache (5 min) for user/product lookups and custom field definitions
 
 Key patterns:
 - **Error handling**: All tools wrapped with `@handle_errors` — SDK exceptions return `{"error": "...", "type": "..."}` instead of tracebacks
 - **Pagination hints**: Find tools return `hasMore`, `nextOffset`, `remaining` in metadata when more results exist
-- **Caching**: `get_user`, `find_users`, `get_product`, `find_products`, `get_me` are cached per API key for 5 minutes
+- **Caching**: `get_user`, `find_users`, `get_product`, `find_products`, `get_me`, and custom field definitions are cached per API key for 5 minutes
+- **Custom fields**: Resolved inline from opaque `{fieldId, value}` to named `{"Field Name": {"value": X, "fieldId": N, "type": "Date"}}`. Filter with `custom.FIELD_ID` syntax. Use `find_custom_fields(entity)` to discover available fields.
+- **Dot-notation fields**: `fields=['orderRow.product.id']` keeps the top-level key for sparse nested selection
 - **Find tools** accept optional `filters`, `fields`, `sort`, `limit`, `offset` — filters is optional so they double as list tools
 
 The `upsales` SDK dependency is pinned to a private GitHub repo (`AxelOhlander/upsales-python-sdk`). Docker builds require a `GITHUB_TOKEN` build arg to access it. For local development, switch `pyproject.toml` to `upsales = { path = "../upsales-python-sdk", editable = true }` for instant SDK changes without pushing.
