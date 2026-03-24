@@ -25,7 +25,8 @@ Add to your MCP config:
       "command": "uv",
       "args": ["--directory", "/path/to/upsales-mcp", "run", "upsales-mcp"],
       "env": {
-        "UPSALES_API_KEY": "your-api-key"
+        "UPSALES_API_KEY": "your-api-key",
+        "UPSALES_USER_ID": "1"
       }
     }
   }
@@ -35,12 +36,12 @@ Add to your MCP config:
 ### Standalone
 
 ```bash
-UPSALES_API_KEY=your-key uv run upsales-mcp
+UPSALES_API_KEY=your-key UPSALES_USER_ID=1 uv run upsales-mcp
 ```
 
 ## Hosted Deployment (Railway)
 
-Each user authenticates with their own Upsales API key via `Authorization: Bearer <upsales-api-key>`.
+Each user authenticates with their own Upsales API key via `Authorization: Bearer <upsales-api-key>`. User identity can be sent via `X-Upsales-User-Id` header.
 
 ### Environment Variables
 
@@ -48,7 +49,6 @@ Each user authenticates with their own Upsales API key via `Authorization: Beare
 |----------|----------|---------|-------------|
 | `MCP_TRANSPORT` | Yes | `stdio` | Set to `streamable-http` for hosted mode |
 | `PORT` | No | `8000` | HTTP port (Railway sets this automatically) |
-| `UPSALES_USER_ID` | No | — | Current user's Upsales ID (enables "my meetings" queries) |
 
 ### Deploy to Railway
 
@@ -67,7 +67,8 @@ Each user authenticates with their own Upsales API key via `Authorization: Beare
       "type": "streamable-http",
       "url": "https://your-app.up.railway.app/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_UPSALES_API_KEY"
+        "Authorization": "Bearer YOUR_UPSALES_API_KEY",
+        "X-Upsales-User-Id": "1"
       }
     }
   }
