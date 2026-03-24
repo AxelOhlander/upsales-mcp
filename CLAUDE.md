@@ -24,7 +24,7 @@ uv run pytest tests/ -v               # Run tests
 
 Modular layout under `src/upsales_mcp/`:
 
-- **`server.py`** — FastMCP instance (`mcp`), auth (contextvar, Bearer middleware, `_get_client()`), `main()` entrypoint
+- **`server.py`** — FastMCP instance (`mcp`), auth (contextvar, Bearer middleware, `_get_client()` async context manager), `main()` entrypoint
 - **`tools.py`** — 22 tool definitions (get/find for 10 entities + `get_me` + `find_custom_fields`), error handling decorator, pagination metadata, custom field resolution
   - Entities: companies, contacts, appointments, phone calls, orders, mail, activities, agreements, products, users
 - **`serialize.py`** — `serialize()` converts Pydantic models to JSON via `model_dump()`, strips 50+ noise fields, supports sparse field selection, dot-notation nested fields, metadata wrapping, and inline custom field resolution
@@ -43,7 +43,7 @@ The `upsales` SDK dependency is pinned to a private GitHub repo (`AxelOhlander/u
 
 ## Known Workarounds
 
-- **WEB-5366**: `f[]=value` on orders drops the field. Workaround: `_ORDER_FIELD_MAP` sends `f[]=orderValue` instead. Fix merged, expected live 2026-03-17.
+- **WEB-5366**: `f[]=value` on orders drops the field. Workaround: `_ORDER_FIELD_MAP` sends `f[]=orderValue` instead. Fix merged, expected live 2026-03-17. **Verify if removable — past expected date.**
 - **WEB-5367**: Agreements endpoint crashes with any `f[]` param. Workaround: always include `metadata` in the fields list.
 
 ## Deployment

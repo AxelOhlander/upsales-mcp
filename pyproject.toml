@@ -1,7 +1,7 @@
 [project]
 name = "upsales-mcp"
 version = "0.1.0"
-description = "MCP server for Upsales CRM - exposes contacts, companies, appointments, phone calls, and orders"
+description = "MCP server for Upsales CRM - read-only access to companies, contacts, appointments, phone calls, orders, mail, activities, agreements, products, and users"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

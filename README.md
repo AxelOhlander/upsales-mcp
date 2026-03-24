@@ -55,8 +55,7 @@ Each user authenticates with their own Upsales API key via `Authorization: Beare
 1. Push this repo to GitHub
 2. Create a new Railway project from the repo
 3. Set `MCP_TRANSPORT=streamable-http` in environment variables
-4. Set `AUTH_ISSUER_URL` and `AUTH_RESOURCE_URL` to your Railway deployment URL
-5. Deploy
+4. Deploy
 
 ### Client Configuration (Remote)
 
@@ -92,7 +91,11 @@ Each entity has a `get_*` tool (by ID) and a `find_*` tool (search/list with fil
 | Products | `get_product` | `find_products` | Yes |
 | Users | `get_user` | `find_users` | — |
 
-Plus: `get_me` (current user profile) and `find_custom_fields` (discover custom field definitions for any entity).
+Plus: `get_me` (current user profile) and `find_custom_fields` (discover custom field definitions for any entity, including `orderrow`).
+
+### Caching
+
+User, product, and custom field definition lookups are cached for 5 minutes per API key to avoid redundant requests.
 
 ### Custom Fields
 
