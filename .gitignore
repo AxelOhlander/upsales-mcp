@@ -6,3 +6,5 @@ dist/
 .env
 .claude/
 ai_temp_scripts/
+Screenshot*.png
+demo/e2e-test-result.png
